@@ -17,7 +17,7 @@ REPO = "https://github.com/Rathore-Sahab/delivery-radar"
 CASE_STUDY = "https://github.com/Rathore-Sahab/google-maps-doorstep-case-study"
 
 st.set_page_config(page_title="DeliveryRadar", page_icon="📦", layout="wide",
-                   initial_sidebar_state="expanded")
+                   initial_sidebar_state="auto")
 
 # --------------------------------------------------------------------------- #
 #  Design system
@@ -27,8 +27,9 @@ INK, MUTED, LINE, SOFT = "#1f2937", "#6b7280", "#e5e7eb", "#f5f7fb"
 
 st.markdown(f"""
 <style>
-  [data-testid="stToolbar"], [data-testid="stDecoration"], footer {{ display: none !important; }}
-  .block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1240px; }}
+  [data-testid="stDecoration"], [data-testid="stAppDeployButton"], [data-testid="stMainMenu"], footer {{ display: none !important; }}
+  header[data-testid="stHeader"] {{ background: transparent; }}
+  .block-container {{ padding-top: 3.4rem; padding-bottom: 3rem; max-width: 1240px; }}
   section[data-testid="stSidebar"] {{ border-right: 1px solid {LINE}; }}
   section[data-testid="stSidebar"] .block-container {{ padding-top: 1.5rem; }}
   h1, h2, h3 {{ letter-spacing: -0.01em; }}
@@ -61,17 +62,29 @@ st.markdown(f"""
   .side-foot {{ font-size:12.5px; color:{MUTED}; line-height:1.7; }}
   .side-foot a {{ color:{BLUE}; text-decoration:none; }}
   div[data-testid="stDataFrame"] {{ border:1px solid {LINE}; border-radius:10px; }}
+  .tbl-wrap {{ border:1px solid {LINE}; border-radius:12px; max-height:540px; overflow:auto; }}
+  table.q {{ width:100%; border-collapse:collapse; font-size:13.5px; }}
+  table.q th {{ position:sticky; top:0; background:{SOFT}; color:{MUTED}; font-weight:600; text-align:left;
+               padding:10px 12px; border-bottom:1px solid {LINE}; white-space:nowrap; z-index:1; }}
+  table.q td {{ padding:10px 12px; border-bottom:1px solid #f0f2f5; vertical-align:top; color:{INK}; }}
+  table.q td.num, table.q th.num {{ text-align:right; white-space:nowrap; }}
+  table.q tr:hover td {{ background:#fafbfd; }}
+  .bar {{ height:6px; background:#eef1f5; border-radius:3px; margin-top:6px; width:80px; }}
+  .bar > div {{ height:6px; border-radius:3px; }}
+  .muted {{ color:{MUTED}; font-size:12.5px; }}
   .side-label {{ font-size:11px; font-weight:700; letter-spacing:.08em; color:{MUTED}; margin:14px 0 6px 2px; }}
-  section[data-testid="stSidebar"] [data-testid="stRadio"], section[data-testid="stSidebar"] [data-testid="stRadio"] > div {{ width: 100%; }}
-  section[data-testid="stSidebar"] div[role="radiogroup"] {{ gap: 2px; flex-direction: column; width: 100%; }}
-  section[data-testid="stSidebar"] div[role="radiogroup"] > div {{ width: 100%; display: block; }}
-  section[data-testid="stSidebar"] label[data-testid="stRadioOption"] {{ width: 100%; min-width: 236px; display: flex; box-sizing: border-box; padding: 7px 12px;
-      border-radius: 8px; margin: 0; cursor: pointer; transition: background .15s; }}
-  section[data-testid="stSidebar"] label[data-testid="stRadioOption"] > div > div:first-child {{ display: none; }}
-  section[data-testid="stSidebar"] label[data-testid="stRadioOption"]:hover {{ background: #eaeef4; }}
-  section[data-testid="stSidebar"] div[data-selected="true"] > label[data-testid="stRadioOption"] {{ background: #e3edfd; }}
-  section[data-testid="stSidebar"] div[data-selected="true"] > label[data-testid="stRadioOption"] p {{ color:{BLUE}; font-weight:600; }}
-  section[data-testid="stSidebar"] label[data-testid="stRadioOption"] p {{ font-size: 14.5px; }}
+  section[data-testid="stSidebar"] .stButton {{ margin-bottom: -10px; }}
+  section[data-testid="stSidebar"] .stButton button > div {{ justify-content: flex-start; width: 100%; }}
+  section[data-testid="stSidebar"] .stButton button p {{ text-align: left; }}
+  section[data-testid="stSidebar"] .stButton button {{ justify-content: flex-start; text-align: left;
+      padding: 8px 12px; border-radius: 8px; min-height: 38px; border: none; box-shadow: none; }}
+  section[data-testid="stSidebar"] .stButton button p {{ font-size: 14.5px; }}
+  section[data-testid="stSidebar"] button[data-testid="stBaseButton-tertiary"] {{ color: {INK}; background: transparent; }}
+  section[data-testid="stSidebar"] button[data-testid="stBaseButton-tertiary"]:hover {{ background: #eaeef4; color: {INK}; }}
+  section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"],
+  section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"]:hover,
+  section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"]:focus {{ background: #e3edfd; color: {BLUE}; }}
+  section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"] p {{ font-weight: 600; color: {BLUE}; }}
   section[data-testid="stSidebar"] hr {{ margin: 14px 0; }}
 </style>
 """, unsafe_allow_html=True)
@@ -112,6 +125,21 @@ def chart(fig, h=320, legend=False):
 
 
 DOT = {"High": "🔴 High", "Medium": "🟠 Medium", "Low": "🟢 Low"}
+
+
+def risk_cell(p, band, scale=1.0):
+    color = {"High": RED, "Medium": AMBER, "Low": GREEN}[band]
+    w = min(100, p * 100 / scale)
+    return (f'{pill(band)}<div class="bar"><div style="width:{w:.0f}%;background:{color}"></div></div>'
+            f'<div class="muted">{p:.0%} risk</div>')
+
+
+def html_table(headers, rows, num_cols=()):
+    th = "".join(f'<th class="{"num" if i in num_cols else ""}">{h}</th>' for i, h in enumerate(headers))
+    body = "".join("<tr>" + "".join(f'<td class="{"num" if i in num_cols else ""}">{c}</td>'
+                                    for i, c in enumerate(r)) + "</tr>" for r in rows)
+    st.markdown(f'<div class="tbl-wrap"><table class="q"><thead><tr>{th}</tr></thead><tbody>{body}</tbody></table></div>',
+                unsafe_allow_html=True)
 
 
 def action_legend(actions):
@@ -168,15 +196,32 @@ def br_name(code):
 # --------------------------------------------------------------------------- #
 PAGES = ["Overview", "Risk queue", "Checker", "Insights", "About"]
 
+MARKETS = ["India · line-haul", "Brazil · e-commerce"]
+st.session_state.setdefault("market", MARKETS[0])
+st.session_state.setdefault("page", PAGES[0])
+
+
+def nav_button(label, key, active):
+    if st.button(label, key=key, type="primary" if active else "tertiary", width="stretch"):
+        return True
+    return False
+
+
 with st.sidebar:
     st.markdown('<div class="brand"><div class="brand-mark">◉</div><div class="brand-name">DeliveryRadar</div></div>'
                 '<div class="brand-tag">Late-delivery early warning for logistics teams</div>', unsafe_allow_html=True)
     st.markdown('<div class="side-label">MARKET</div>', unsafe_allow_html=True)
-    market = st.radio("Market", ["🇮🇳  India · line-haul", "🇧🇷  Brazil · e-commerce"],
-                      label_visibility="collapsed")
-    india = "India" in market
+    for m in MARKETS:
+        if nav_button(m, f"mk_{m}", st.session_state.market == m):
+            st.session_state.market = m
+            st.rerun()
     st.markdown('<div class="side-label">MENU</div>', unsafe_allow_html=True)
-    page = st.radio("Navigate", PAGES, label_visibility="collapsed")
+    for p in PAGES:
+        if nav_button(p, f"pg_{p}", st.session_state.page == p):
+            st.session_state.page = p
+            st.rerun()
+    india = st.session_state.market.startswith("India")
+    page = st.session_state.page
     st.divider()
     st.markdown(f'<div class="side-foot">'
                 f'{"Delhivery · 26,222 hub-to-hub trips · Sep–Oct 2018" if india else "Olist · 95,976 orders · 2016–2018"}'
@@ -345,27 +390,18 @@ def queue():
         caught = top.severe.sum() / max(d.severe.sum(), 1)
         kpi(k[3], "Lift vs random checks", f"{caught / (cap / 100):.1f}×" if d.severe.sum() else "–",
             f"{caught:.0%} caught vs {cap}% by chance")
-        top["Band"] = top.risk.map(i_band).map(DOT)
-        top["Lane"] = top.src.map(hub) + " → " + top.dst.map(hub)
-        top["Why"] = [i_reasons(r) for r in top.itertuples()]
-        top["Action"] = top.risk.map(i_band).map(I_ACTION)
-        top["Risk"] = top.risk * 100
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
         show = st.toggle("Show what actually happened", value=False)
-        cols = ["Band", "Risk", "Lane", "osrm", "eta_pred", "Why"] + (["actual", "severe"] if show else [])
-        st.dataframe(top[cols].rename(columns={"osrm_km": "Km", "osrm": "Map ETA (min)", "eta_pred": "Radar ETA (min)",
-                                               "actual": "Actual (min)", "severe": "Severe delay?"}),
-                     hide_index=True, width="stretch", height=460, column_config={
-                         "Band": st.column_config.TextColumn(width="small"),
-                         "Risk": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=100, width="small"),
-                         "Lane": st.column_config.TextColumn(width="large"),
-                         "Why": st.column_config.TextColumn(width="large"),
-                         "Action": st.column_config.TextColumn(width="large"),
-                         "Km": st.column_config.NumberColumn(format="%.0f", width="small"),
-                         "Map ETA (min)": st.column_config.NumberColumn(format="%.0f"),
-                         "Radar ETA (min)": st.column_config.NumberColumn(format="%.0f", help="DeliveryRadar ETA"),
-                         "Actual (min)": st.column_config.NumberColumn(format="%.0f"),
-                         "Severe delay?": st.column_config.CheckboxColumn()})
+        headers = ["Risk", "Lane", "Map ETA", "Radar ETA", "Why it's flagged"] + (["Actual", "Severe delay?"] if show else [])
+        rows = []
+        for r in top.itertuples():
+            row = [risk_cell(r.risk, i_band(r.risk)),
+                   f'{hub(r.src)} → {hub(r.dst)}<div class="muted">{r.osrm_km:.0f} km · {r.route_type}</div>',
+                   f"{r.osrm:.0f} min", f"<b>{r.eta_pred:.0f} min</b>", i_reasons(r)]
+            if show:
+                row += [f"{r.actual:.0f} min", "✔ Yes" if r.severe else "No"]
+            rows.append(row)
+        html_table(headers, rows, num_cols=(2, 3, 5))
         action_legend(I_ACTION)
     else:
         hero("Risk queue · Brazil", "Today's orders, riskiest first",
@@ -387,26 +423,21 @@ def queue():
         kpi(k[2], "Late orders among flagged", f"{int(top.is_late.sum())} of {int(d.is_late.sum())}", "known in hindsight", "green")
         kpi(k[3], "Late orders caught (test period)", f"{BM['capture_curve']['model'][idx]:.0%}",
             f"vs {cap}% by random checks")
-        top["Band"] = top.risk.map(b_band).map(DOT)
-        top["Lane"] = top.seller_state.map(br_name) + " → " + top.customer_state.map(br_name)
-        top["Why"] = [b_reasons(s, r, o) for s, r, o in zip(top.slack_days, top.seller_prior_late_rate, top.seller_prior_orders)]
-        top["Action"] = top.risk.map(b_band).map(B_ACTION)
-        top["Risk"] = top.risk * 100
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
         show = st.toggle("Show what actually happened", value=False)
-        cols = ["Band", "Risk", "Lane", "category", "promised_days", "slack_days", "Why"] + \
-               (["is_late", "days_late", "review_score"] if show else [])
-        st.dataframe(top[cols].rename(columns={"category": "Category", "promised_days": "Promised (days)",
-                                               "slack_days": "Buffer (days)", "is_late": "Late?",
-                                               "days_late": "Days vs promise", "review_score": "Review ★"}),
-                     hide_index=True, width="stretch", height=460, column_config={
-                         "Band": st.column_config.TextColumn(width="small"),
-                         "Risk": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=40, width="small"),
-                         "Lane": st.column_config.TextColumn(width="medium"),
-                         "Why": st.column_config.TextColumn(width="large"),
-                         "Action": st.column_config.TextColumn(width="large"),
-                         "Buffer (days)": st.column_config.NumberColumn(format="%.1f"),
-                         "Late?": st.column_config.CheckboxColumn()})
+        headers = ["Risk", "Lane", "Category", "Promised", "Buffer", "Why it's flagged"] + \
+                  (["Outcome", "Review"] if show else [])
+        rows = []
+        for r in top.itertuples():
+            row = [risk_cell(r.risk, b_band(r.risk), scale=0.4),
+                   f"{br_name(r.seller_state)} → {br_name(r.customer_state)}",
+                   str(r.category).replace("_", " "), f"{r.promised_days:.0f} days", f"{r.slack_days:+.1f} days",
+                   b_reasons(r.slack_days, r.seller_prior_late_rate, r.seller_prior_orders)]
+            if show:
+                row += [f"Late by {r.days_late:.0f} days" if r.is_late else "On time",
+                        "–" if pd.isna(r.review_score) else f"{r.review_score:.0f} ★"]
+            rows.append(row)
+        html_table(headers, rows, num_cols=(3, 4))
         action_legend(B_ACTION)
 
 
