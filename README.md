@@ -1,6 +1,6 @@
 # 📦 DeliveryRadar: predict late deliveries before they ship
 
-**Live app:** _<add your Streamlit link>_ · **PRD:** [PRD.md](PRD.md)
+**Live app:** _<add your Streamlit link>_ · **PRD:** [PRD.md](PRD.md) · **Related case study:** [Google Maps Doorstep](https://github.com/Rathore-Sahab/google-maps-doorstep-case-study)
 
 Late deliveries wreck customer trust. Across 96k real e-commerce orders, on-time orders average **4.3★** while late ones average **2.3★**, and **61%** of late orders get a 1–2★ review. Ops teams usually find out *after* the fact.
 
