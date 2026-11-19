@@ -6,7 +6,7 @@ Late deliveries wreck customer trust. Across 96k real e-commerce orders, on-time
 
 DeliveryRadar scores every order **at the moment it's placed** and gives hub teams a daily risk queue, with a reason and a suggested action for each flag. It's built on two real datasets: **96k e-commerce orders from Brazil** (Olist) and **26k line-haul trips between Indian hubs** (Delhivery).
 
-![Hub queue](docs/2_hub_queue.png)
+![DeliveryRadar overview](docs/0_india_overview.png)
 
 ## Results (held-out test period: May–Aug 2018, 25k orders the model never saw)
 
@@ -39,7 +39,7 @@ Does the idea hold in India? I applied it to **26,222 real trips between 1,641 D
 
 Flagging the riskiest 20% of trips catches **64% of severe delays** (ROC-AUC 0.87). Lane history alone gets 62%, the same lesson as Brazil: a lane's own track record is the strongest signal.
 
-![India tab](docs/5_india_hub_lanes.png)
+
 
 ## The insight: two simple signals beat 21 features
 
@@ -50,13 +50,19 @@ In mid-2018 the platform shortened its delivery promises. The 21-feature model h
 
 ## App walkthrough
 
-| Tab | What it shows |
+A sidebar app with a **market switch** (🇮🇳 India line-haul · 🇧🇷 Brazil e-commerce) and five pages:
+
+| Page | What it does |
 |---|---|
-| ① Why it matters | Review score by delivery delay: the promise is the product |
-| ② Hub risk queue | A day's orders ranked by risk, with a team-capacity slider, reason codes and a hindsight toggle |
-| ③ Score an order | Pick a lane, a promise and seller history to get the risk, the reason and the action. It also works as a "what promise is safe?" tool |
-| ④ How the model works | Capture curves, comparison with baselines, limitations |
-| ⑤ 🇮🇳 India: hub lanes | Map ETA vs real transit on Delhivery lanes, bottleneck hubs, and a lane checker (e.g. Pune → Bhiwandi) with a better ETA and a severe-delay risk |
+| **Overview** | The problem in four numbers, two charts, and how DeliveryRadar works in three steps |
+| **Risk queue** | A day's trips or orders ranked by risk, with a team-capacity slider, a reason for every flag, recommended actions, and a toggle that reveals what actually happened |
+| **Checker** | India: pick a hub-to-hub lane (e.g. Pune → Vadgaon Sheri) for a realistic ETA and severe-delay risk. Brazil: check whether a delivery promise is safe |
+| **Insights** | India: bottleneck hubs, risk by state, capture curve. Brazil: model comparison, capture curve, buffer vs late rate |
+| **About** | Problem, approach, data sources and links |
+
+| Risk queue (India) | Lane checker (India) |
+|---|---|
+| ![Risk queue](docs/5_india_hub_lanes.png) | ![Lane checker](docs/6_india_lane_checker.png) |
 
 ## Method
 
@@ -64,6 +70,10 @@ In mid-2018 the platform shortened its delivery promises. The 21-feature model h
 - **Target:** delivered after the promised (estimated) delivery date
 - **No leakage:** time-based split; every history feature uses only earlier orders
 - **Metric:** "capture @ capacity", the share of late orders found when reviewing the top X% riskiest orders, because ops capacity is the real constraint
+
+## SQL analysis
+
+[`sql/`](sql/) holds 6 SQL queries that answer ops questions on the same data, using `GROUP BY`/`HAVING`, `CASE WHEN`, a CTE with a window function, and a `LEFT JOIN`. Results are in [sql/README.md](sql/README.md).
 
 ## Run it yourself
 
@@ -85,6 +95,7 @@ app.py               Streamlit app
 src/data_prep.py     raw Olist CSVs → order-level features
 src/train.py         model training, evaluation, app artifacts (Brazil)
 src/india.py         Delhivery hub-lane ETA + severe-delay models (India)
+sql/                 6 SQL queries (DuckDB) on the artifacts: late rates, seller reliability, daily queue capture, India hubs
 artifacts/           trained model + precomputed tables (used by the app)
 PRD.md               product requirements doc
 docs/                screenshots

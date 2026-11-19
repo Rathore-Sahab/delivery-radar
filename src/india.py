@@ -118,6 +118,14 @@ def main(raw, out):
         "risk_thresholds": {"high": float(np.quantile(s, .80)), "medium": float(np.quantile(s, .60))},
     }
 
+    # ---- Scored test week = the "daily line-haul risk queue" demo -----------
+    eta_pred = te.osrm * np.exp(eta.predict(te[FEATURES]))
+    sc = te.assign(risk=s, eta_pred=eta_pred)[[
+        "trip_uuid", "od_start", "src", "dst", "src_state", "dst_state", "route_type", "osrm_km",
+        "osrm", "eta_pred", "actual", "ratio", "severe", "risk", "lane_n"]].copy()
+    sc["trip_uuid"] = sc.trip_uuid.str[-8:]
+    sc.to_parquet(out / "india_scored.parquet", index=False)
+
     # ---- Final models on all legs + lookup tables for the app ---------------
     eta_f = HistGradientBoostingRegressor(**eta.get_params()).fit(leg[FEATURES], leg.lr)
     clf_f = HistGradientBoostingClassifier(**clf.get_params()).fit(leg[FEATURES], leg.severe)
