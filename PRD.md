@@ -78,7 +78,7 @@ Ratings stay above 4★ even when a delivery takes long, **as long as the promis
 - **Data recency:** seller late rates use past outcomes. In production, use only orders whose promised date has already passed.
 - **Alert fatigue:** if associates ignore the queue, the metric doesn't move. Track the share of flagged orders that are actioned.
 - **Customer messaging can backfire:** a "your order may be late" message for an order that arrives on time could still hurt trust. This must be A/B tested.
-- **Generalisation:** the data is Brazilian. Indian lanes (pin-code clusters, COD, festive peaks) need retraining. The method transfers; the numbers don't.
+- **Generalisation:** the order-level model is Brazilian. I tested the core idea on Indian data (26k Delhivery hub-to-hub trips): lane history again was the strongest signal, catching 62% of severe delays in the riskiest 20% of trips (64% with the full model). Indian order-level promises (pin codes, COD, festive peaks) still need their own data.
 
 ## 8. Launch plan
 
@@ -89,7 +89,19 @@ Ratings stay above 4★ even when a delivery takes long, **as long as the promis
 | 2 — A/B test proactive messages | 50/50 split of High-risk orders: proactive ETA message vs none | Review ★ on late orders ↑, WISMO tickets ↓ |
 | 3 — Scale + v2 | All hubs; add courier-scan re-scoring; promise-setting at checkout | — |
 
-## 9. v2+ ideas
+## 9. India evidence (Delhivery hub lanes)
+
+| Finding | Number |
+|---|---|
+| Real transit vs map-route ETA (median) | 2.0× |
+| Trips within ±20% of map ETA | 6% |
+| ETA within ±20%: map → DeliveryRadar | 7% → 60% (median error 39 → 12 min) |
+| Severe delays caught in riskiest 20% of trips | 64% |
+| Severe-delay rate: trips < 20 km vs > 300 km | 34% vs 2% |
+
+**Implication:** in India the promise breaks most often on short, last-mile legs. That's also the problem my Google Maps "Doorstep" case study tackles.
+
+## 10. v2+ ideas
 
 - Re-score in real time when a shipment misses a scan milestone. (This is the signal I worked with at Flipkart: missing and orphan shipments.)
 - **Promise optimisation:** show each customer the shortest promise that keeps late risk under X%.

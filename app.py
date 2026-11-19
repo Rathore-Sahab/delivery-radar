@@ -29,7 +29,23 @@ def load():
     return bundle, m, q, routes, tables
 
 
+@st.cache_resource
+def load_india():
+    return (joblib.load(ART / "india_models.joblib"), json.load(open(ART / "india_metrics.json")),
+            pd.read_csv(ART / "india_lanes.csv"), pd.read_csv(ART / "india_hubs.csv"),
+            pd.read_csv(ART / "india_states.csv"), pd.read_csv(ART / "india_by_distance.csv"))
+
+
 bundle, M, Q, ROUTES, T = load()
+IND, IM, ILANES, IHUBS, ISTATES, IDIST = load_india()
+
+BR_STATES = {"AC": "Acre", "AL": "Alagoas", "AM": "Amazonas", "AP": "Amapá", "BA": "Bahia", "CE": "Ceará",
+             "DF": "Distrito Federal", "ES": "Espírito Santo", "GO": "Goiás", "MA": "Maranhão",
+             "MG": "Minas Gerais", "MS": "Mato Grosso do Sul", "MT": "Mato Grosso", "PA": "Pará",
+             "PB": "Paraíba", "PE": "Pernambuco", "PI": "Piauí", "PR": "Paraná", "RJ": "Rio de Janeiro",
+             "RN": "Rio Grande do Norte", "RO": "Rondônia", "RR": "Roraima", "RS": "Rio Grande do Sul",
+             "SC": "Santa Catarina", "SE": "Sergipe", "SP": "São Paulo", "TO": "Tocantins"}
+br = lambda code: f"{BR_STATES.get(code, code)} ({code})"
 HI, MED = bundle["band_thresholds"]["high"], bundle["band_thresholds"]["medium"]
 GLOBAL_LATE = bundle["global_late_rate"]
 
@@ -59,12 +75,12 @@ ACTIONS = {
 
 # --------------------------------------------------------------------------- #
 st.title("📦 DeliveryRadar")
-st.caption("Predict which orders will miss their promised delivery date — **before they ship** — "
-           "so hub teams can act on the few that matter. Built on 96k real e-commerce orders "
-           "(Olist, Brazil, 2016–18).")
+st.caption("Predict which deliveries will miss their promise — **before they ship** — so hub teams can act on "
+           "the few that matter. Tabs ①–④: 96k real e-commerce orders (Olist, **Brazil**, 2016–18). "
+           "Tab ⑤: 26k real line-haul legs between **Indian** hubs (Delhivery, 2018).")
 
-tab1, tab2, tab3, tab4 = st.tabs(["① Why it matters", "② Hub risk queue",
-                                  "③ Score an order", "④ How the model works"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["① Why it matters", "② Hub risk queue", "③ Score an order",
+                                        "④ How the model works", "⑤ 🇮🇳 India: hub lanes"])
 
 # ---------------- TAB 1: the problem --------------------------------------- #
 with tab1:
@@ -100,7 +116,8 @@ with tab1:
 # ---------------- TAB 2: daily hub queue ----------------------------------- #
 with tab2:
     st.markdown("#### The daily view a hub lead would open every morning")
-    st.caption("Orders from the **held-out test period** (May–Aug 2018), scored by a model that never saw them.")
+    st.caption("Orders from the **held-out test period** (May–Aug 2018), scored by a model that never saw them. "
+               "From/To are Brazilian state codes (SP = São Paulo, RJ = Rio de Janeiro, MG = Minas Gerais…).")
     days = sorted(Q.order_purchase_timestamp.dt.date.unique())
     a, b = st.columns([1, 2])
     day = a.selectbox("Order date", days, index=days.index(pd.Timestamp("2018-05-14").date()))
@@ -146,10 +163,10 @@ with tab3:
     st.markdown("#### Score a new order at the moment it's placed")
     states = sorted(ROUTES.seller_state.unique())
     c1, c2, c3 = st.columns(3)
-    o = c1.selectbox("Seller (origin) state", states, index=states.index("SP"))
+    o = c1.selectbox("Seller (origin) state 🇧🇷", states, index=states.index("SP"), format_func=br)
     dests = sorted(ROUTES[ROUTES.seller_state == o].customer_state.unique())
-    dst = c2.selectbox("Customer (destination) state", dests,
-                       index=dests.index("RJ") if "RJ" in dests else 0)
+    dst = c2.selectbox("Customer (destination) state 🇧🇷", dests,
+                       index=dests.index("RJ") if "RJ" in dests else 0, format_func=br)
     lane = ROUTES[(ROUTES.seller_state == o) & (ROUTES.customer_state == dst)].iloc[0]
     promise = c3.number_input("Promised delivery (days)", 1, 90, int(lane.typical_promise))
     c4, c5 = st.columns(2)
@@ -172,7 +189,7 @@ with tab3:
         title={"text": f"Late-delivery risk · {bnd}"}))
     fig.update_layout(height=260, margin=dict(t=50, b=0))
     g1.plotly_chart(fig, width="stretch")
-    g2.markdown(f"**Lane {o} → {dst}:** {int(lane.orders):,} past orders · ~{lane.avg_km:,.0f} km · "
+    g2.markdown(f"**Lane {br(o)} → {br(dst)}:** {int(lane.orders):,} past orders · ~{lane.avg_km:,.0f} km · "
                 f"real transit ≈ **{lane.route_hist_days:.1f} days** · historical late rate {lane.late_rate:.0%}")
     g2.markdown(f"**Buffer:** promised {promise} days − real transit {lane.route_hist_days:.1f} = "
                 f"**{slack:+.1f} days**")
@@ -226,6 +243,100 @@ seller history uses outcomes that may not be known yet at order time (in product
 next: A/B test proactive customer messages on High-risk orders and measure review score + "where is my order" ticket volume.
 """)
 
+# ---------------- TAB 5: India — Delhivery hub lanes ----------------------- #
+with tab5:
+    st.markdown("#### Does this work in India? Real line-haul data from Delhivery")
+    st.caption(f"{IM['legs']:,} trips between {IM['hubs']:,} hubs in {IM['states']} states and UTs "
+               "(Sep 12 – Oct 3, 2018). Each trip is compared with its **map-route ETA** (OSRM), "
+               "the estimate many logistics teams plan with.")
+    k = st.columns(4)
+    k[0].metric("Real time vs map ETA (median)", f"{IM['median_ratio']:.1f}×")
+    k[1].metric("Trips within ±20% of map ETA", f"{IM['share_within_20pct_of_map']:.0%}")
+    k[2].metric("Truck-hours beyond map plan", f"{IM['excess_hours']:,.0f}")
+    k[3].metric("Trips with severe delay (≥3× map ETA)", f"{IM['severe_rate_test']:.0%}")
+
+    st.markdown("##### 1 · Map ETAs are wrong by ~2×, but lane history fixes most of it")
+    l, r = st.columns(2)
+    ec = pd.DataFrame(IM["eta_compare"])
+    fig = px.bar(ec, y="method", x="within_20pct", orientation="h",
+                 text=(ec.within_20pct * 100).round(0).astype(int).astype(str) + "%",
+                 color=ec.method.str.startswith("DeliveryRadar"), color_discrete_map={True: BLUE, False: GREY})
+    fig.update_layout(showlegend=False, xaxis_tickformat=".0%", xaxis_title="Trips with ETA within ±20% of actual",
+                      yaxis_title="", yaxis_autorange="reversed", height=300, margin=dict(t=10, l=10))
+    l.plotly_chart(fig, width="stretch")
+    me = {e["method"]: e["median_abs_err_min"] for e in IM["eta_compare"]}
+    l.caption(f"Median ETA error falls from **{me['Map ETA (OSRM)']:.0f} min** (map) to "
+              f"**{me['DeliveryRadar ETA model']:.0f} min**. One fixed 2× buffer gets halfway; each lane's own "
+              "history does most of the rest, the same lesson as the Brazil model.")
+    dd = IDIST
+    fig = px.bar(dd, x="osrm_km", y="severe_rate", text=(dd.severe_rate * 100).round(0).astype(int).astype(str) + "%")
+    fig.update_traces(marker_color=RED)
+    fig.update_layout(xaxis_title="Trip distance (map route)", yaxis_title="Severe-delay rate",
+                      yaxis_tickformat=".0%", height=300, margin=dict(t=10))
+    r.plotly_chart(fig, width="stretch")
+    r.caption("**The shortest trips are the least reliable.** Under 20 km, about 1 in 3 trips takes 3× the map ETA; "
+              "over 300 km it's about 1 in 50. The last mile, not the highway, is where plans break.")
+
+    st.markdown("##### 2 · Where the delays pile up")
+    l, r = st.columns([3, 2])
+    hv = IHUBS.head(10).assign(hub=lambda d: d.dst.str.replace(r" \(.*", "", regex=True),
+                               severe_rate=lambda d: d.severe_rate * 100)
+    l.dataframe(hv[["hub", "state", "inbound_legs", "median_ratio", "severe_rate", "excess_hours"]].rename(columns={
+        "hub": "Destination hub", "state": "State", "inbound_legs": "Inbound trips",
+        "median_ratio": "Real ÷ map ETA", "severe_rate": "Severe-delay rate", "excess_hours": "Hours beyond plan"}),
+        hide_index=True, width="stretch", column_config={
+            "Real ÷ map ETA": st.column_config.NumberColumn(format="%.1f×"),
+            "Severe-delay rate": st.column_config.NumberColumn(format="%.0f%%"),
+            "Hours beyond plan": st.column_config.NumberColumn(format="%.0f")})
+    l.caption("Top 10 hubs by truck-hours lost against the map plan. Big hubs (Gurgaon, Bangalore) lose the most "
+              "hours by volume; Kolkata, Bhiwandi and Muzaffarpur stand out on severity.")
+    sv = ISTATES.head(10).sort_values("severe_rate")
+    fig = px.bar(sv, y="src_state", x="severe_rate", orientation="h",
+                 text=(sv.severe_rate * 100).round(0).astype(int).astype(str) + "%")
+    fig.update_traces(marker_color=AMBER)
+    fig.update_layout(xaxis_tickformat=".0%", xaxis_title="Severe-delay rate (origin state)", yaxis_title="",
+                      height=340, margin=dict(t=10))
+    r.plotly_chart(fig, width="stretch")
+
+    st.markdown("##### 3 · Lane checker: a better ETA before the truck leaves")
+    srcs = ILANES.groupby("src").legs.sum().sort_values(ascending=False).index.tolist()
+    c1, c2, c3 = st.columns([2, 2, 1])
+    s_hub = c1.selectbox("Origin hub 🇮🇳", srcs, index=srcs.index("Pune_Tathawde_H (Maharashtra)")
+                         if "Pune_Tathawde_H (Maharashtra)" in srcs else 0)
+    opts = ILANES[ILANES.src == s_hub].sort_values("legs", ascending=False)
+    d_hub = c2.selectbox("Destination hub", opts.dst.tolist())
+    hour = c3.slider("Dispatch hour", 0, 23, 10)
+    ln = opts[opts.dst == d_hub].iloc[0]
+    x = pd.DataFrame([{"osrm": ln.osrm, "osrm_km": ln.osrm_km, "carting": int(ln.carting >= 0.5),
+                       "lane_prior": ln.lane_prior, "lane_n": ln.lane_n, "src_prior": ln.src_prior,
+                       "dst_prior": ln.dst_prior, "hour": hour, "dow": 2}])[IND["features"]]
+    eta = float(ln.osrm * np.exp(IND["eta"].predict(x)[0]))
+    risk = float(IND["severe"].predict_proba(x)[0, 1])
+    th = IND["thresholds"]
+    rb = "🔴 High" if risk >= th["high"] else ("🟠 Medium" if risk >= th["medium"] else "🟢 Low")
+    m = st.columns(4)
+    m[0].metric("Map ETA", f"{ln.osrm:.0f} min")
+    m[1].metric("DeliveryRadar ETA", f"{eta:.0f} min", f"{eta - ln.osrm:+.0f} min vs map", delta_color="inverse")
+    m[2].metric("Severe-delay risk", f"{risk:.0%} · {rb}")
+    m[3].metric("Past trips on this lane", f"{int(ln.legs)}")
+    st.markdown(f"**Lane:** {ln.osrm_km:.0f} km by road · past trips took a median **{ln.median_ratio:.1f}×** the map ETA · "
+                f"{ln.severe_rate:.0%} were severely delayed")
+    st.caption({"🔴 High": "Action: plan this trip with the DeliveryRadar ETA, not the map ETA · alert the destination hub "
+                           "· set customer promises from the adjusted ETA.",
+                "🟠 Medium": "Action: add buffer to downstream connections · watch the scan at the destination hub.",
+                "🟢 Low": "Action: standard plan."}[rb])
+
+    st.markdown("##### 4 · Model check (held-out week: Sep 27 – Oct 3)")
+    sv = IM["severe"]
+    st.markdown(
+        f"Flagging the riskiest **20%** of trips catches **{sv['capture_at_20pct']:.0%}** of severe delays "
+        f"(ROC-AUC {sv['roc_auc']:.2f}). Lane history alone catches {sv['lane_only_capture_at_20pct']:.0%} "
+        f"(AUC {sv['lane_only_roc_auc']:.2f}). The test week directly follows the training "
+        "period, so conditions are similar and the richer model adds a little on top of the simple lane signal.")
+    st.caption("Data: Delhivery trip dataset, publicly shared for educational business case studies. "
+               "Line-haul and carting trips between hubs, not doorstep deliveries. Each trip is scored with "
+               "only earlier trips' history.")
+
 st.divider()
-st.caption("Built by Pawan Rathod · Data: Olist Brazilian E-Commerce Public Dataset (CC BY-NC-SA 4.0) · "
-           "Code & PRD on GitHub")
+st.caption("Built by Pawan Rathod · Data: Olist Brazilian E-Commerce Public Dataset (CC BY-NC-SA 4.0); "
+           "Delhivery trip dataset (public, educational) · Code & PRD on GitHub")
