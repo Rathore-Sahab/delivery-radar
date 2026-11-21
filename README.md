@@ -1,109 +1,88 @@
-# 📦 DeliveryRadar: predict late deliveries before they ship
+# DeliveryRadar
 
-**Live app:** _<add your Streamlit link>_ · **PRD:** [PRD.md](PRD.md) · **Related case study:** [Google Maps Doorstep](https://github.com/Rathore-Sahab/google-maps-doorstep-case-study)
+Scores e-commerce orders for the risk of arriving after the promised date, at the moment the order is placed, so a hub team can work through the riskiest ones first. It is built around how Indian marketplaces run fulfilment (seller or FC, sort hub, 3PL, last mile). It is trained on Brazilian data because no public Indian dataset has promised and actual delivery dates.
 
-Late deliveries wreck customer trust. Across 96k real e-commerce orders, on-time orders average **4.3★** while late ones average **2.3★**, and **61%** of late orders get a 1–2★ review. Ops teams usually find out *after* the fact.
+**Live app:** [delivery-radar-pawan.streamlit.app](https://delivery-radar-pawan.streamlit.app/) · **Product write-up:** [PRD.md](PRD.md)
 
-DeliveryRadar scores every order **at the moment it's placed** and gives hub teams a daily risk queue, with a reason and a suggested action for each flag. It's built on two real datasets: **96k e-commerce orders from Brazil** (Olist) and **26k line-haul trips between Indian hubs** (Delhivery).
+![Daily queue](docs/daily_queue.png)
 
-![DeliveryRadar overview](docs/0_india_overview.png)
+## Background
 
-## Results (held-out test period: May–Aug 2018, 25k orders the model never saw)
+During my internship on Flipkart's issue resolution team, most of the work started after a shipment had already gone wrong: a missing package, a damaged one, a customer chasing an update. I wanted to see how much of that could be spotted on day one, using only information available when the order is placed.
 
-| Approach | ROC-AUC | Late orders caught reviewing **top 10%** | …**top 20%** |
+There's no public Indian dataset with this level of detail, so this uses the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce). It has about 96k delivered orders from 2016 to 2018, with promised dates, actual delivery dates and reviews.
+
+The data makes the cost clear. On-time orders average 4.3 out of 5 and late ones 2.3. Ratings barely change with delivery speed as long as the promised date is met, and drop sharply once it is missed.
+
+## Results
+
+Trained on Sep 2016 to Apr 2018 and tested on the following four months (25,239 orders). "Capture @ X%" is the share of all late orders that land in the top X% of orders ranked by score. That's the number that matters when a team can only check a fraction of orders each day.
+
+| Approach | ROC-AUC | Capture @10% | Capture @20% |
 |---|---|---|---|
-| Random checks | 0.50 | 10% | 20% |
-| Rule of thumb (distance ÷ promised days) | 0.56 | 19% | 31% |
-| Gradient-boosted model, 21 features | 0.68 | 25% | 40% |
-| **DeliveryRadar: 2 signals, logistic regression** | **0.74** | **30%** | **49%** |
+| Random sampling | 0.50 | 10% | 20% |
+| Rule: distance ÷ promised days | 0.56 | 19% | 31% |
+| Gradient boosting, 21 features | 0.68 | 25% | 40% |
+| Logistic regression, 2 features (used) | 0.74 | 30% | 49% |
 
-**Headline:** a team that reviews 1 in 5 orders catches about **half of all late deliveries** in advance. That is 2.5× random checking and 1.6× the rule of thumb.
+Checking 20% of orders catches about half of the late ones.
 
-## 🇮🇳 India: Delhivery hub lanes
+## What the model uses
 
-Does the idea hold in India? I applied it to **26,222 real trips between 1,641 Delhivery hubs in 32 states and UTs** (Sep–Oct 2018). Each trip is compared with its map-route ETA (OSRM).
+1. **Delivery buffer:** promised days minus the typical transit time on that lane (seller state to customer state), computed only from earlier orders.
+2. **Seller late rate:** the seller's share of past orders that arrived late, shrunk toward the overall average so that new sellers aren't scored at the extremes.
 
-| Finding | Number |
-|---|---|
-| Real transit time vs map ETA (median) | **2.0×** |
-| Trips arriving within ±20% of the map ETA | **6%** |
-| Truck-hours beyond the map plan | **~48,000** |
-| Severe-delay rate (≥3× map ETA) on trips under 20 km vs over 300 km | **34% vs 2%**. The last mile is where plans break. |
+The 21-feature gradient-boosted model looked like the obvious choice, but it did worse on the test months. In mid-2018 the platform started promising shorter delivery windows (median promise fell from about 24 days to 13–19), and the bigger model had learned the earlier pattern. The buffer feature compares each promise to how long deliveries on that lane actually take, so it held up. A two-feature model is also much easier to explain to whoever has to act on a flag.
 
-| ETA method (held-out week, Sep 27 – Oct 3) | Within ±20% of actual | Median error |
-|---|---|---|
-| Map ETA | 7% | 39 min |
-| Map ETA × one fixed 2× buffer | 45% | 19 min |
-| Map ETA × lane history | 56% | 14 min |
-| **DeliveryRadar ETA model** | **60%** | **12 min** |
+## The app
 
-Flagging the riskiest 20% of trips catches **64% of severe delays** (ROC-AUC 0.87). Lane history alone gets 62%, the same lesson as Brazil: a lane's own track record is the strongest signal.
+- **Overview:** how delivery outcomes relate to reviews, and how the late rate moves over time and by state.
+- **Daily risk queue:** pick a day and how many orders your team can check; the riskiest orders come first, with why each was flagged and what to do. Filter by band, reveal what actually happened, or download the queue as CSV.
+- **Check an order:** pick a route, a promise and a seller's track record to get a risk score. It also shows how the risk changes with the promise, so you can find the shortest promise that stays low risk.
+- **India playbook:** how each input maps to an Indian marketplace, where Indian networks get stressed, actions in Indian ops terms, a scorer for Indian lanes using your own transit numbers, and a rollout plan.
+- **How it works:** the comparison above, capture curves and known limitations.
 
+## Applying it in India
 
+The two inputs aren't specific to Brazil; the fitted numbers are. At an Indian marketplace I would change four things:
 
-## The insight: two simple signals beat 21 features
+- **Lanes at pin-code-cluster level**, not state level, and split by 3PL partner and surface vs air. Pune to Mumbai and Pune to a rural Maharashtra pin code are different lanes.
+- **Seller reliability that includes dispatch-SLA breaches**, i.e. handing over after the cut-off. For FC-fulfilled orders, use FC dispatch performance.
+- **Calendar flags** for festive sales (September to November, Diwali) and monsoon (June to September, mostly regional). In Olist, the late rate tripled in the Black Friday month, which is the closest analogue.
+- **A COD flag.** A late cash-on-delivery order is a likely RTO, so it's worth combining lateness risk with RTO risk in the same queue.
 
-1. **Delivery buffer** = promised days − how long this lane (seller state → customer state) *really* takes, computed from earlier orders only. Orders with ≤0 days of buffer are late **3.8×** as often as orders with 15+ days.
-2. **Seller reliability**: the seller's past late rate, shrunk toward the average for new sellers.
+The High-band action translates to a priority first-mile pickup, a flag to the 3PL's hub, a WhatsApp or SMS ETA update before the customer asks and, for COD, a confirmation call. The rollout I'd propose is shadow mode at one mother hub outside the festive season, then a pilot, then a run through a sale event. The PRD has the details.
 
-In mid-2018 the platform shortened its delivery promises. The 21-feature model had memorised the old regime and degraded on new data. The buffer signal compares each promise with reality, so it kept working. It is also explainable, which matters when an ops associate has to act on a flag.
-
-## App walkthrough
-
-A sidebar app with a **market switch** (🇮🇳 India line-haul · 🇧🇷 Brazil e-commerce) and five pages:
-
-| Page | What it does |
-|---|---|
-| **Overview** | The problem in four numbers, two charts, and how DeliveryRadar works in three steps |
-| **Risk queue** | A day's trips or orders ranked by risk, with a team-capacity slider, a reason for every flag, recommended actions, and a toggle that reveals what actually happened |
-| **Checker** | India: pick a hub-to-hub lane (e.g. Pune → Vadgaon Sheri) for a realistic ETA and severe-delay risk. Brazil: check whether a delivery promise is safe |
-| **Insights** | India: bottleneck hubs, risk by state, capture curve. Brazil: model comparison, capture curve, buffer vs late rate |
-| **About** | Problem, approach, data sources and links |
-
-| Risk queue (India) | Lane checker (India) |
-|---|---|
-| ![Risk queue](docs/5_india_hub_lanes.png) | ![Lane checker](docs/6_india_lane_checker.png) |
-
-## Method
-
-- **Data:** [Olist Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce): 96k delivered orders, 2016–2018 · Delhivery trip dataset (public, shared for educational business cases): 26k hub-to-hub trips in India, Sep–Oct 2018
-- **Target:** delivered after the promised (estimated) delivery date
-- **No leakage:** time-based split; every history feature uses only earlier orders
-- **Metric:** "capture @ capacity", the share of late orders found when reviewing the top X% riskiest orders, because ops capacity is the real constraint
-
-## SQL analysis
-
-[`sql/`](sql/) holds 6 SQL queries that answer ops questions on the same data, using `GROUP BY`/`HAVING`, `CASE WHEN`, a CTE with a window function, and a `LEFT JOIN`. Results are in [sql/README.md](sql/README.md).
-
-## Run it yourself
+## Running it
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py              # uses pre-built artifacts/
+streamlit run app.py
+```
 
-# to rebuild from raw data: download the Olist CSVs into data/raw/, then
+The app reads the pre-built files in `artifacts/`. To rebuild them, download the Olist CSVs into `data/raw/` and run:
+
+```bash
 python src/data_prep.py
 python src/train.py
-# India tab: put the Delhivery CSV at data/raw/delhivery.csv, then
-python src/india.py
 ```
 
-## Repo structure
-
 ```
-app.py               Streamlit app
-src/data_prep.py     raw Olist CSVs → order-level features
-src/train.py         model training, evaluation, app artifacts (Brazil)
-src/india.py         Delhivery hub-lane ETA + severe-delay models (India)
-sql/                 6 SQL queries (DuckDB) on the artifacts: late rates, seller reliability, daily queue capture, India hubs
-artifacts/           trained model + precomputed tables (used by the app)
-PRD.md               product requirements doc
-docs/                screenshots
+app.py              Streamlit app
+src/data_prep.py    raw CSVs to one row per order, with features
+src/train.py        training, evaluation, exports for the app
+artifacts/          model and precomputed tables
+PRD.md              product write-up: users, metrics, rollout
+docs/               screenshots
 ```
 
-## Limitations & next steps
+## Limitations
 
-India data covers hub-to-hub line-haul, not doorstep delivery, and only 3 weeks · no courier scan events (v2: re-score mid-route when a scan milestone is missed) · seller history should use only orders whose promised date has passed · next step: A/B test proactive customer messages for High-risk orders.
+- Seller late rate is calculated from past orders whose outcome might not have been known yet on the scoring date. A production version should only count orders whose promised date has passed, so the numbers above may be slightly optimistic.
+- About 1 in 8 High-risk orders is actually late. That's roughly 3× the base rate, but it means the action on a flag has to be cheap.
+- There's no courier tracking data. Re-scoring an order when it misses a scan milestone is the obvious next step.
+- It's Brazilian data. The approach should transfer to Indian networks, but the coefficients, thresholds and lane transit times have to be rebuilt (see above).
 
 ---
-Built by **Pawan Rathod**: MBA (Operations & SCM), ex-Flipkart Issue Resolution intern. I built this because at Flipkart I spent my days chasing shipments *after* they went wrong.
+
+Pawan Rathod · MBA, Operations & Supply Chain. Data is CC BY-NC-SA 4.0 (Olist).

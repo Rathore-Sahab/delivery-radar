@@ -1,7 +1,7 @@
 """
 train.py — Train the late-delivery risk model and export everything the app needs.
 
-Design choices (be ready to explain these in interviews):
+Design notes:
   * TIME-BASED split (train: before May-2018, test: May–Aug 2018). A random split
     leaks "future" information and overstates accuracy.
   * All history features (route transit time, seller late rate) use ONLY orders
